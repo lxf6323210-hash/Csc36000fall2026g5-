@@ -12,7 +12,7 @@ Each person lists a different plugin filename.
 
 | Student name | CUNY alias | Plugin filename | Feature branch |
 | --- | --- | --- | --- |
-| XINFANLI | XINFAN.LI11 | session_models.py |  |
+| XINFANLI | XINFAN.LI11 | session_models.py | XINFAN.LI11-session_models.py |
 |  |  |  |  |
 |  |  |  |  |
 |  |  |  |  |
