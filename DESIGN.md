@@ -128,9 +128,9 @@ Leader election (Bully, ring, majority/term). The leader is killed, or the membe
 
 | Mode | Fault or change | What Write does | What Read returns on which node | What you gave up |
 | --- | --- | --- | --- | --- |
-| READ_OWN_WRITES |  |  |  |  |
-| MONOTONIC_READS |  |  |  |  |
-| NO_SESSION |  |  |  |  |
+| READ_OWN_WRITES | A write succeeds on n0, but n1 has a stale replica. | Records the value and version written by the session. | A read in the same session returns its latest written value, even if the local replica is stale. | Extra session metadata and possible waiting or forwarding, increasing latency. |
+| MONOTONIC_READS | Two reads in the same session reach nodes with different versions. | Records the session's write progress. | The second read returns the same or a newer version than the first read, never an older version. | Extra version tracking and possible forwarding or waiting. |
+| NO_SESSION | A read reaches a stale replica after a write. | Performs a normal write without tracking session guarantees. | A read on n1 may return an older value or report that the key is missing. | No read-your-writes or monotonic-read guarantee. |
 
 ### atomic_commit.py
 
