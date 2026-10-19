@@ -15,7 +15,7 @@ Each person lists a different plugin filename.
 | XINFANLI | XINFAN.LI11 | session_models.py | XINFAN.LI11-session_models.py |
 |  |  |  |  |
 |  |  |  |  |
-|  |  |  |  |
+| Diana Lucero | diana.lucero66 | write_completion.py  | diana.lucero66-write_completion.py |
 |  |  |  |  |
 
 ## Platform reminder
@@ -66,9 +66,9 @@ Keep the tables for the plugins your group owns; you can drop the others.
 
 | Mode | Fault or change | What Write does | What Read returns on which node | What you gave up |
 | --- | --- | --- | --- | --- |
-| ACK_ALL |  |  |  |  |
-| ACK_ONE |  |  |  |  |
-| ACK_QUORUM |  |  |  |  |
+| ACK_ALL | One node, n2, is paused in a three-node cluster. | Waits for all three acknowledgments. Since n2 is paused, the Write returns an acknowledgment timeout, although other nodes may have received the value. | After n2 resumes and repair completes, a Read on n2 returns the updated value. | Higher latency and lower availability because every node must respond. |
+| ACK_ONE | One node, n2, is paused during a Write. | Returns success after one acknowledgment, even if other nodes have not received the value. | An updated node returns the new value, but n2 may initially return an old or missing value until repair. | Faster writes, but some replicas may remain outdated. |
+| ACK_QUORUM | One node is paused, then two nodes are paused in a three-node cluster. | Requires two acknowledgments. The Write succeeds with one node paused but times out when two are paused. | An updated node returns the new value. A node that missed the Write may return an older value until repair. | Requires a majority of nodes to respond, limiting availability during failures. |
 
 ### leader_replication.py
 
