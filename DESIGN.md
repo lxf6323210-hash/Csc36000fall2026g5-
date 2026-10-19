@@ -32,6 +32,33 @@ Repeat this block for each person.
 **Commands** (provided client, against a `node` cluster):  
 **A mode combination that should fail, and the error Write or Read returns:**  
 
+
+**Plugin file:** `write_completion.py`
+
+**Modes we will implement:** `ACK_ALL`, `ACK_ONE`, `ACK_QUORUM`
+
+**One history we will demo:** Start a three-node cluster (`n0`, `n1`, `n2`) and pause `n2`. Write using each mode. `ACK_ONE` succeeds with one acknowledgment, `ACK_QUORUM` succeeds with two, and `ACK_ALL` times out because `n2` is paused. After `n2` resumes and repair completes, a Read on `n2` returns the updated value.
+
+**Commands:**
+
+```bash
+# Pause n2
+python3 -m platform.client --addr 127.0.0.1:9602 fault --pause on
+
+# Test each mode
+python3 -m platform.client --addr 127.0.0.1:9600 write key_one one --write-completion ACK_ONE
+python3 -m platform.client --addr 127.0.0.1:9600 write key_quorum two --write-completion ACK_QUORUM
+python3 -m platform.client --addr 127.0.0.1:9600 write key_all three --write-completion ACK_ALL
+
+# Resume n2 and check recovery
+python3 -m platform.client --addr 127.0.0.1:9602 fault --pause off
+python3 -m platform.client --addr 127.0.0.1:9602 read key_one
+python3 -m platform.client --addr 127.0.0.1:9602 read key_quorum
+```
+
+**A mode combination that should fail, and the error Write or Read returns:** Using `ACK_ALL` while `n2` is paused should return `ok=false` with `ack timeout`, because all three nodes must acknowledge the Write.
+
+
 ## Tradeoffs
 
 For each mode you implement, name a fault or change — pause a node, split the network, add a node, two Writes at once — and fill the columns.
