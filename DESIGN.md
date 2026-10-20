@@ -13,7 +13,7 @@ Each person lists a different plugin filename.
 | Student name | CUNY alias | Plugin filename | Feature branch |
 | --- | --- | --- | --- |
 | XINFANLI | XINFAN.LI11 | session_models.py | XINFAN.LI11-session_models.py |
-|  |  |  |  |
+| Arsenii Chan | ARSENII.CHAN82 | request_routing.py | ARSENII.CHAN82-request_routing.py |
 |  |  |  |  |
 |  |  |  |  |
 |  |  |  |  |
@@ -31,6 +31,29 @@ Repeat this block for each person.
 **One history we will demo** (the fault or change, the Writes/Reads, the bytes you expect on which node):  
 **Commands** (provided client, against a `node` cluster):  
 **A mode combination that should fail, and the error Write or Read returns:**  
+
+**Plugin file:** request_routing.py (Arsenii Chan)  
+**Modes we will implement:** FORWARD, DIRECTORY_TIER, CLIENT_AWARE  
+**One history we will demo:** 3 nodes, n0 owns `alpha` (default owner with no partitioning plugin is the first node). Write `alpha=one` on n1 with FORWARD: n1 passes it to n0 with hop=1, Write returns ok with owner=n0, Read on n0 gives `one`, and n1 still has 0 keys. Writing `gamma=three` on n1 with CLIENT_AWARE returns `not owner` (owner=n0) and nothing is stored on n0. Then pause n0 and Write with FORWARD on n1: it fails with `forward to n0 failed` instead of keeping the bytes on n1. n1 only waits 1.5s, though, so once n0 is unpaused it still applies the Write and `read delta` on n0 returns `four`. The client was told it failed but it happened anyway.  
+**Commands:**
+```
+python3 -m platform.node --node-id n0 --port 9600 --config cluster.json
+python3 -m platform.node --node-id n1 --port 9601 --config cluster.json
+python3 -m platform.node --node-id n2 --port 9602 --config cluster.json
+
+python3 -m platform.client --addr 127.0.0.1:9601 write alpha one --request-routing FORWARD
+python3 -m platform.client --addr 127.0.0.1:9600 read alpha
+python3 -m platform.client --addr 127.0.0.1:9602 read alpha --request-routing FORWARD
+python3 -m platform.client --addr 127.0.0.1:9601 status
+python3 -m platform.client --addr 127.0.0.1:9602 write beta two --request-routing DIRECTORY_TIER
+python3 -m platform.client --addr 127.0.0.1:9601 write gamma three --request-routing CLIENT_AWARE
+python3 -m platform.client --addr 127.0.0.1:9600 read gamma
+python3 -m platform.client --addr 127.0.0.1:9600 fault --pause on
+python3 -m platform.client --addr 127.0.0.1:9601 write delta four --request-routing FORWARD
+python3 -m platform.client --addr 127.0.0.1:9600 fault --pause off
+python3 -m platform.client --addr 127.0.0.1:9600 read delta
+```
+**A mode combination that should fail, and the error Write or Read returns:** CLIENT_AWARE Write sent to any node that isn't the owner returns `not owner` (owner field says who to ask). FORWARD when two nodes each think the other one owns the key: run `add-node a0 127.0.0.1 9602` on n1 and `add-node a0 127.0.0.1 9601` on n2, then a FORWARD Write on n1 bounces between them and returns `hop limit`.  
 
 ## Tradeoffs
 
@@ -108,9 +131,9 @@ Keep the tables for the plugins your group owns; you can drop the others.
 
 | Mode | Fault or change | What Write does | What Read returns on which node | What you gave up |
 | --- | --- | --- | --- | --- |
-| FORWARD |  |  |  |  |
-| DIRECTORY_TIER |  |  |  |  |
-| CLIENT_AWARE |  |  |  |  |
+| FORWARD | Write for `alpha` lands on n1, owner is n0 | n1 sends it to n0 with hop+1, n0 stores it. Returns ok, owner=n0 | `one` on n0. n1 has nothing. A FORWARD Read on n2 also gets `one` (served_by=n0) | Extra network hop on every misdirected request. If nodes disagree on the owner it loops until hop 8 |
+| DIRECTORY_TIER | Same `add-node a0` setup as the FORWARD failure, so n1 and n2 disagree about the owner | n1 sends it once, as CLIENT_AWARE, to the node it thinks owns the key. That node says `not owner` and it stops there instead of bouncing | Nothing stored on any node | Fails fast but doesn't find the owner. The stale-entry retry needs DIRECTORY partitioning to fill `node.directory`, and nobody in our group has partitioning.py, so we can't demo it |
+| CLIENT_AWARE | Write for `gamma` sent to n1, owner is n0 | Returns `not owner`, owner=n0. Nothing stored anywhere | n0 Read of `gamma` is not found. A CLIENT_AWARE Read on n1 also returns `not owner` | Client has to know the partitioning map. No help from the cluster when its map is out of date |
 
 ### leader_election.py
 
