@@ -15,7 +15,7 @@ Each person lists a different plugin filename.
 | XINFANLI | XINFAN.LI11 | session_models.py | XINFAN.LI11-session_models.py |
 | Arsenii Chan | ARSENII.CHAN82 | request_routing.py | ARSENII.CHAN82-request_routing.py |
 | Ezzeldin Moussa | EZZELDIN.MOUSSA42 | partitioning.py | EZZELDIN.MOUSSA42-partitioning |
-|  |  |  |  |
+| Qiuming Wang | QIUMING.WANG21 | leader_replication.py | QIUMING.WANG21-leader_replication |
 |  |  |  |  |
 
 ## Platform reminder
@@ -96,6 +96,16 @@ python3 -m platform.client --addr 127.0.0.1:9600 pin alpha n2 --partitioning ITE
 ```
 **A mode combination that should fail, and the error Write or Read returns:** `pin alpha n2 --partitioning ITEM` (or under HASH_MOD, SLOTS or KEY_RANGE) returns `ok=False`; only DIRECTORY accepts a pin. `pin alpha n7 --partitioning DIRECTORY` also returns `ok=False`, because n7 is not a member. A partitioning mode with no request routing, like `write key3 v3 --partitioning HASH_MOD` sent to n0 (n2 owns `key3`), returns `not owner` (owner=n2) and stores nothing.  
 
+
+**Plugin file:** `leader_replication.py`
+**Modes we will implement** (see that plugin’s section in `week06/README.md`):`SINGLE_LEADER`, `LEADERLESS`, `MULTI_LEADER`
+**One history we will demo** (the fault or change, the Writes/Reads, the bytes you expect on which node): In `SINGLE_LEADER` mode, isolate the leader node from the rest of the cluster. A Write request sent to a follower node in the partition without the leader will not succeed.
+**Commands** (provided client, against a `node` cluster):
+`python3 -m platform.client --addr 127.0.0.1:9600 fault --isolate on`
+`python3 -m platform.client --addr 127.0.0.1:9601 write alpha one --leader-replication SINGLE_LEADER`
+**A mode combination that should fail, and the error Write or Read returns:**
+A Write directly to an isolated follower node in `SINGLE_LEADER` mode will fail and return `error="not leader"`.
+
 ## Tradeoffs
 
 For each mode you implement, name a fault or change — pause a node, split the network, add a node, two Writes at once — and fill the columns.
@@ -140,9 +150,9 @@ Keep the tables for the plugins your group owns; you can drop the others.
 
 | Mode | Fault or change | What Write does | What Read returns on which node | What you gave up |
 | --- | --- | --- | --- | --- |
-| SINGLE_LEADER |  |  |  |  |
-| LEADERLESS |  |  |  |  |
-| MULTI_LEADER |  |  |  |  |
+| SINGLE_LEADER |Network split (isolate leader)  | Rejected (returns not leader) on follower nodes | Returns old/stale bytes on follower nodes until split heals | High availability during network partitions (writes are blocked on the minority side). |
+| LEADERLESS | Network split | Accepts the write on whichever node receives it | Returns the locally accepted bytes on that node (may differ between sides) | Strong consistency (different nodes may return different values for the same key). |
+| MULTI_LEADER | Network split | Accepts the write locally, queues replication for other leaders | Returns the locally updated bytes | Simple conflict resolution (requires later merging of diverging writes). |
 
 ### conflicts.py
 
