@@ -37,7 +37,8 @@ Repeat this block for each person.
 
 **Modes we will implement:** `ACK_ALL`, `ACK_ONE`, `ACK_QUORUM`
 
-**One history we will demo:** Start a three-node cluster (`n0`, `n1`, `n2`) and pause `n2`. Write using each mode. `ACK_ONE` succeeds with one acknowledgment, `ACK_QUORUM` succeeds with two, and `ACK_ALL` times out because `n2` is paused. After `n2` resumes and repair completes, a Read on `n2` returns the updated value.
+**One history we will demo:** Start a three-node cluster (`n0`, `n1`, `n2`) and pause `n2`. Write using each mode. `ACK_ONE` succeeds with one acknowledgment, `ACK_QUORUM` succeeds with two, and `ACK_ALL` times out because `n2` is paused. After `n2` resumes and repair completes, reading `key_one` on `n2` returns `one`, and reading `key_quorum` on `n2` returns `two`.
+
 
 **Commands:**
 
@@ -184,9 +185,16 @@ If you own one of these files, say a little more:
 
 Numbered steps: processes to start, client commands, faults, and the output you expect.
 
-1.
-2.
-3.
+### write_completion.py demo
+```bash
+# Start each node in a separate terminal from week06
+python3 -m platform.node --node-id n0 --port 9600 --config cluster.json
+python3 -m platform.node --node-id n1 --port 9601 --config cluster.json
+python3 -m platform.node --node-id n2 --port 9602 --config cluster.json
+```
+1. Start three nodes (`n0`, `n1`, `n2`) using `cluster.json`. Pause `n2` using the client.
+2. Write `key_one=one` with `ACK_ONE` and `key_quorum=two` with `ACK_QUORUM`. Both should succeed. Write `key_all=three` with `ACK_ALL`; it should return `ok=false` and `ack timeout`.
+3. Resume `n2` and read `key_one` and `key_quorum` from it. After repair, the values should be `one` and `two`, respectively.
 
 ## What we are not building this week
 
