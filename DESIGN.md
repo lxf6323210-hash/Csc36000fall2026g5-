@@ -16,7 +16,7 @@ Each person lists a different plugin filename.
 | Arsenii Chan | ARSENII.CHAN82 | request_routing.py | ARSENII.CHAN82-request_routing.py |
 | Ezzeldin Moussa | EZZELDIN.MOUSSA42 | partitioning.py | EZZELDIN.MOUSSA42-partitioning |
 | Qiuming Wang | QIUMING.WANG21 | leader_replication.py | QIUMING.WANG21-leader_replication |
-|  |  |  |  |
+| Diana Lucero | diana.lucero66 | write_completion.py | diana.lucero66-write_completion.py |
 
 ## Platform reminder
 
@@ -26,15 +26,37 @@ Values are opaque bytes.
 
 Repeat this block for each person.
 
-**Plugin file:**  
-**Modes we will implement** (see that plugin’s section in `week06/README.md`):  
-**One history we will demo** (the fault or change, the Writes/Reads, the bytes you expect on which node):  
-**Commands** (provided client, against a `node` cluster):  
-**A mode combination that should fail, and the error Write or Read returns:**  
+**Plugin file:**
+**Modes we will implement** (see that plugin’s section in `week06/README.md`):
+**One history we will demo** (the fault or change, the Writes/Reads, the bytes you expect on which node):
+**Commands** (provided client, against a `node` cluster):
+**A mode combination that should fail, and the error Write or Read returns:**
 
-**Plugin file:** request_routing.py (Arsenii Chan)  
-**Modes we will implement:** FORWARD, DIRECTORY_TIER, CLIENT_AWARE  
-**One history we will demo:** 3 nodes, n0 owns `alpha` (default owner with no partitioning plugin is the first node). Write `alpha=one` on n1 with FORWARD: n1 passes it to n0 with hop=1, Write returns ok with owner=n0, Read on n0 gives `one`, and n1 still has 0 keys. Writing `gamma=three` on n1 with CLIENT_AWARE returns `not owner` (owner=n0) and nothing is stored on n0. Then pause n0 and Write with FORWARD on n1: it fails with `forward to n0 failed` instead of keeping the bytes on n1. n1 only waits 1.5s, though, so once n0 is unpaused it still applies the Write and `read delta` on n0 returns `four`. The client was told it failed but it happened anyway.  
+**Plugin file:** `write_completion.py` (Diana Lucero)
+**Modes we will implement:** `ACK_ALL`, `ACK_ONE`, `ACK_QUORUM`
+**One history we will demo:** Start three nodes (`n0`, `n1`, `n2`) and pause `n2`. Write `key_one=one` with `ACK_ONE`, `key_quorum=two` with `ACK_QUORUM`, and `key_all=three` with `ACK_ALL` through `n0`. `ACK_ONE` returns success with one acknowledgment, `ACK_QUORUM` succeeds with two, and `ACK_ALL` returns `ack timeout`. After resuming `n2` and running repair, a Read of `key_one` on `n2` returns `one` and a Read of `key_quorum` on `n2` returns `two`.
+**Commands:**
+```bash
+# Run these in three separate terminals from week06/:
+python3 -m platform.node --node-id n0 --port 9600 --config cluster.json
+python3 -m platform.node --node-id n1 --port 9601 --config cluster.json
+python3 -m platform.node --node-id n2 --port 9602 --config cluster.json
+
+# Run these in a fourth terminal from week06/:
+python3 -m platform.client --addr 127.0.0.1:9602 fault --pause on
+python3 -m platform.client --addr 127.0.0.1:9600 write key_one one --write-completion ACK_ONE
+python3 -m platform.client --addr 127.0.0.1:9600 write key_quorum two --write-completion ACK_QUORUM
+python3 -m platform.client --addr 127.0.0.1:9600 write key_all three --write-completion ACK_ALL
+python3 -m platform.client --addr 127.0.0.1:9602 fault --pause off
+python3 -m platform.client --addr 127.0.0.1:9600 rebalance
+python3 -m platform.client --addr 127.0.0.1:9602 read key_one
+python3 -m platform.client --addr 127.0.0.1:9602 read key_quorum
+```
+**A mode combination that should fail, and the error Write or Read returns:** Using `ACK_ALL` while `n2` is paused returns `ok=false` with `ack timeout` because all three nodes must acknowledge the Write. A timeout does not mean the other nodes rolled back the Write.
+
+**Plugin file:** request_routing.py (Arsenii Chan)
+**Modes we will implement:** FORWARD, DIRECTORY_TIER, CLIENT_AWARE
+**One history we will demo:** 3 nodes, n0 owns `alpha` (default owner with no partitioning plugin is the first node). Write `alpha=one` on n1 with FORWARD: n1 passes it to n0 with hop=1, Write returns ok with owner=n0, Read on n0 gives `one`, and n1 still has 0 keys. Writing `gamma=three` on n1 with CLIENT_AWARE returns `not owner` (owner=n0) and nothing is stored on n0. Then pause n0 and Write with FORWARD on n1: it fails with `forward to n0 failed` instead of keeping the bytes on n1. n1 only waits 1.5s, though, so once n0 is unpaused it still applies the Write and `read delta` on n0 returns `four`. The client was told it failed but it happened anyway.
 **Commands:**
 ```
 python3 -m platform.node --node-id n0 --port 9600 --config cluster.json
@@ -53,10 +75,10 @@ python3 -m platform.client --addr 127.0.0.1:9601 write delta four --request-rout
 python3 -m platform.client --addr 127.0.0.1:9600 fault --pause off
 python3 -m platform.client --addr 127.0.0.1:9600 read delta
 ```
-**A mode combination that should fail, and the error Write or Read returns:** CLIENT_AWARE Write sent to any node that isn't the owner returns `not owner` (owner field says who to ask). FORWARD when two nodes each think the other one owns the key: run `add-node a0 127.0.0.1 9602` on n1 and `add-node a0 127.0.0.1 9601` on n2, then a FORWARD Write on n1 bounces between them and returns `hop limit`.  
+**A mode combination that should fail, and the error Write or Read returns:** CLIENT_AWARE Write sent to any node that isn't the owner returns `not owner` (owner field says who to ask). FORWARD when two nodes each think the other one owns the key: run `add-node a0 127.0.0.1 9602` on n1 and `add-node a0 127.0.0.1 9601` on n2, then a FORWARD Write on n1 bounces between them and returns `hop limit`.
 
-**Plugin file:** partitioning.py (Ezzeldin Moussa)  
-**Modes we will implement:** HASH_MOD, SLOTS, KEY_RANGE, DIRECTORY, ITEM (all five)  
+**Plugin file:** partitioning.py (Ezzeldin Moussa)
+**Modes we will implement:** HASH_MOD, SLOTS, KEY_RANGE, DIRECTORY, ITEM (all five)
 **One history we will demo:** 3 nodes.
 - *HASH_MOD vs SLOTS.* Write 24 keys (`key1`=`v1` … `key24`=`v24`) through n0 with `--partitioning HASH_MOD --request-routing FORWARD`. Status on n0, n1 and n2 shows the keys spread over all three nodes, not all on n0. Start a 4th process n3 and `add-node n3` on n0. Each node prints in its terminal how many of its keys changed owner, then sends those bytes to the new owner. Under HASH_MOD 18 of the 24 keys move, and 11 of those move between n0, n1 and n2, not to n3. Restart the cluster and repeat with `--partitioning SLOTS`: n3 takes 8 of the 32 slots, so only 7 of the 24 keys move, all of them to n3. In both runs a FORWARD Read of `key7` on any node returns `v7`.
 - *DIRECTORY.* Write `alpha=one` through n0 with `--partitioning DIRECTORY --request-routing FORWARD`. `alpha` is not pinned, so it goes to its slot owner, n1. `pin alpha n2` returns `ok=True`, and n1 sends the bytes to n2. `add-node n3` would give `alpha`'s slot to n3, but the pin holds: `alpha`'s owner is still n2. `rebalance` on n1 sends anything not yet moved. Read `alpha` on n2 returns `one`.
@@ -94,7 +116,7 @@ python3 -m platform.client --addr 127.0.0.1:9600 write hex:ff01 z --partitioning
 python3 -m platform.client --addr 127.0.0.1:9601 read ab --partitioning KEY_RANGE
 python3 -m platform.client --addr 127.0.0.1:9600 pin alpha n2 --partitioning ITEM
 ```
-**A mode combination that should fail, and the error Write or Read returns:** `pin alpha n2 --partitioning ITEM` (or under HASH_MOD, SLOTS or KEY_RANGE) returns `ok=False`; only DIRECTORY accepts a pin. `pin alpha n7 --partitioning DIRECTORY` also returns `ok=False`, because n7 is not a member. A partitioning mode with no request routing, like `write key3 v3 --partitioning HASH_MOD` sent to n0 (n2 owns `key3`), returns `not owner` (owner=n2) and stores nothing.  
+**A mode combination that should fail, and the error Write or Read returns:** `pin alpha n2 --partitioning ITEM` (or under HASH_MOD, SLOTS or KEY_RANGE) returns `ok=False`; only DIRECTORY accepts a pin. `pin alpha n7 --partitioning DIRECTORY` also returns `ok=False`, because n7 is not a member. A partitioning mode with no request routing, like `write key3 v3 --partitioning HASH_MOD` sent to n0 (n2 owns `key3`), returns `not owner` (owner=n2) and stores nothing.
 
 
 **Plugin file:** `leader_replication.py`
@@ -140,9 +162,9 @@ Keep the tables for the plugins your group owns; you can drop the others.
 
 | Mode | Fault or change | What Write does | What Read returns on which node | What you gave up |
 | --- | --- | --- | --- | --- |
-| ACK_ALL |  |  |  |  |
-| ACK_ONE |  |  |  |  |
-| ACK_QUORUM |  |  |  |  |
+| ACK_ALL | Pause `n2` in a three-node cluster. | Waits for all three acknowledgments. With `n2` paused, the Write returns `ack timeout`, even if other nodes received the value. | After `n2` resumes and repair completes, reading `key_all` on `n2` returns `three`. | Higher latency and lower availability because every node must respond. |
+| ACK_ONE | Pause `n2` during a Write. | Returns success after one acknowledgment, even if another node has not received the value. | An updated node returns `one` for `key_one`, but `n2` may initially have an old or missing value; after repair it returns `one`. | Faster writes, but some replicas may remain outdated. |
+| ACK_QUORUM | Pause `n2`, then also pause `n1` in a three-node cluster. | Requires two acknowledgments. The Write succeeds when only `n2` is paused, but times out when both `n1` and `n2` are paused. | An updated node returns `two` for `key_quorum`; a node that missed the Write can return an older value until repair. | Requires a majority to respond, limiting availability during failures. |
 
 ### leader_replication.py
 
@@ -241,9 +263,11 @@ If you own one of these files, say a little more:
 
 Numbered steps: processes to start, client commands, faults, and the output you expect.
 
-1.
-2.
-3.
+### write_completion.py demo
+
+1. Start `n0`, `n1`, and `n2` on ports 9600, 9601, and 9602 using `cluster.json` (startup and client commands are listed in the `write_completion.py` block above). Pause `n2`.
+2. Write `key_one=one` using `ACK_ONE` and `key_quorum=two` using `ACK_QUORUM`; both return `ok=true`. Write `key_all=three` using `ACK_ALL`; it returns `ok=false` with `ack timeout`.
+3. Resume `n2`, run `rebalance` on `n0`, and Read `key_one` and `key_quorum` from `n2`. After repair, the Reads return `one` and `two`, respectively.
 
 ## What we are not building this week
 
